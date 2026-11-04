@@ -1,0 +1,79 @@
+
+name: Build New Era Chat APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '*.zip'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract Android project
+        id: project
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*.zip' | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No ZIP project found"
+            exit 1
+          fi
+
+          mkdir extracted
+          unzip -q "$ZIP_FILE" -d extracted
+
+          SETTINGS=$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) | head -n 1)
+          if [ -z "$SETTINGS" ]; then
+            echo "Gradle settings file not found"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+          VERSION=8.13
+          PROP="$PROJECT_DIR/gradle/wrapper/gradle-wrapper.properties"
+          if [ -f "$PROP" ]; then
+            FOUND=$(sed -n 's/.*gradle-\([0-9][0-9.]*\)-.*zip.*/\1/p' "$PROP" | head -n 1)
+            if [ -n "$FOUND" ]; then VERSION="$FOUND"; fi
+          fi
+          echo "gradle_version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.project.outputs.gradle_version }}
+
+      - name: Build APK
+        run: |
+          PROJECT="${{ steps.project.outputs.project_dir }}"
+          cd "$PROJECT"
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: New-Era-Chat-APK
+          path: extracted/**/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          
