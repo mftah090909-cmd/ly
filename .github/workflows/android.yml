@@ -49,28 +49,19 @@ jobs:
           fi
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: ${{ steps.extract.outputs.version }}
-          cache-disabled: true
-
-      - name: Build APK
+      - name: Generate Debug Keystore
         run: |
           cd "${{ steps.extract.outputs.root }}"
-          gradle assembleDebug
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: New-Era-Chat-APK
-          path: project/**/build/outputs/apk/**/*.apk
-          if-no-files-found: error
-          
+        
